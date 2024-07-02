@@ -2,6 +2,7 @@ import os
 import math
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 
 annotations_file_name = "surgeons_annotations"
@@ -14,8 +15,10 @@ doctors_annotations = pd.read_excel(f"../data/{annotations_file_name}.xlsx", eng
 result_path = f"../data/{annotations_file_name.split('.')[0]}"
 index_data = pd.read_csv("../results/videos_frames_index.csv")
 
-for video_tag, video_data in doctors_annotations.groupby("video"):
-    print(f"Processing video {video_tag}")
+duplicate_ann_vids = []
+
+for video_tag, video_data in tqdm(doctors_annotations.groupby("video")):
+    #print(f"Processing video {video_tag}")
     video_name = f"video{str(video_tag).zfill(2)}"
     valid_frames = index_data[index_data["video_name"] == video_name]["final_frame"].iloc[0]
 
@@ -25,6 +28,7 @@ for video_tag, video_data in doctors_annotations.groupby("video"):
     video_result[["video_name", "two_structures_score", "cystic_plate_score",
                   "hc_triangle_score"]] = [video_name, 0, 0, 0]
 
+    frame_annotated = np.zeros(video_result.shape[0])
     for i, row in video_data.iterrows():
         if row["two_structures"] + row["cystic_plate"] + row["hepatocystic_triangle"] > 0:
             tag = [row["two_structures"], row["cystic_plate"], row["hepatocystic_triangle"]]
@@ -36,6 +40,10 @@ for video_tag, video_data in doctors_annotations.groupby("video"):
             for frame_number in range(initial_frame, final_frame+1):
                 video_result.loc[frame_number, ["two_structures_score",
                                                 "cystic_plate_score", "hc_triangle_score"]] = tag
+                frame_annotated[frame_number] += 1
+
+    if (frame_annotated > 1).any():
+        duplicate_ann_vids.append(video_tag)
 
     # truncate videos so we get rid off of a bunch of zeros
 
@@ -58,3 +66,6 @@ for video_tag, video_data in doctors_annotations.groupby("video"):
 
     video_result = pd.concat(chunk_list)
     video_result.to_csv(os.path.join(result_path, f"{video_name}.csv"), index=False)
+
+print("VIDEOS WITH DUPLICATE ANNOTATIONS")
+print(duplicate_ann_vids)
